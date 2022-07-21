@@ -1,0 +1,12 @@
+.history
+*.log
+content/
+config.ini
+
+
+### Ignore for Python
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
