@@ -1,10 +1,13 @@
-name: 'Notion To Markdown'
+name: 'Convert notion page to markdown'
 description: 'Convert notion page to markdown for Hugo blog'
 author: 'Jacky'
 branding:
   icon: 'edit-3'
   color: 'blue'
 inputs:
+  platform:
+    description: 'Check platform'
+    required: true
   notion_token:
     description: 'Notion Token'
     required: true

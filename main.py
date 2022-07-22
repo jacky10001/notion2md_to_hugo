@@ -2,6 +2,10 @@
 """ Github Action: Notion 轉換成 Markdown
 參考此處 https://github.com/akkuman/notion_to_github_blog
 
+@change 2022/07/22
+- 移除 Notion 類的 category
+- 判斷執行平台來處理輸入參數
+
 @change 2022/07/21
 - 新增註解
 
@@ -30,7 +34,7 @@ import yaml
 from github import Github, GithubException
 from notion_client import Client
 
-from notiontomd import NotionToMarkdown
+from notion2md import NotionToMarkdown
 
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("notion2md")
@@ -103,9 +107,6 @@ class Notion:
         for i in rich_text_node["rich_text"]:
             file_name += i["plain_text"]
         return file_name
-    
-    def category(self, data: dict) -> str:
-        return data["properties"].get("Category", {}).get("select", {}).get("name", "")
     
     def tags(self, data: dict) -> list:
         tags_ = []
@@ -291,28 +292,30 @@ def github_action_env(key):
     return f"INPUT_{key}".upper()
 
 def main():
-
-    # notion_token = os.environ[github_action_env('NOTION_TOKEN')]
-    # notion_database_id = os.environ[github_action_env('NOTION_DATABASE_ID')]
-    # img_store_type = os.getenv(github_action_env('IMG_STORE_TYPE')) or 'local' # 可选 local, github
-    # img_store_path_prefix = os.getenv(github_action_env('IMG_STORE_PATH_PREFIX')) or 'static/notionimg'
-    # img_store_url_path_prefix = os.getenv(github_action_env('IMG_STORE_URL_PATH_PREFIX')) or '/notionimg/'
-    # img_store_github_token = os.getenv(github_action_env('IMG_STORE_GITHUB_TOKEN'))
-    # img_store_github_repo = os.getenv(github_action_env('IMG_STORE_GITHUB_REPO'))
-    # img_store_github_branch = os.getenv(github_action_env('IMG_STORE_GITHUB_BRANCH'))
-    # md_store_path_prefix = os.getenv(github_action_env('MD_STORE_PATH_PREFIX')) or 'content/posts' # 保存markdown文件目錄
-
-    cfg = ConfigParser()
-    cfg.read("config.ini")
-    notion_token = cfg["notion"]["token"]
-    notion_database_id = cfg["notion"]["database_id"]
-    img_store_type = cfg["img_store"]["type"] # local, github
-    img_store_path_prefix = cfg["img_store"]["path_prefix"]
-    img_store_url_path_prefix = cfg["img_store"]["url_path_prefix"]
-    img_store_github_token = cfg["img_store"]["github_token"]
-    img_store_github_repo = cfg["img_store"]["github_repo"]
-    img_store_github_branch = cfg["img_store"]["github_branch"]
-    md_store_path_prefix = cfg["md_store"]["path_prefix"] # save dir of markdown
+    platform = os.getenv(github_action_env("PLATFORM"), "no-github")
+    logger.info(f"Platform: {platform}")
+    if platform == "github":
+        notion_token = os.environ[github_action_env("NOTION_TOKEN")]
+        notion_database_id = os.environ[github_action_env("NOTION_DATABASE_ID")]
+        img_store_type = os.getenv(github_action_env("IMG_STORE_TYPE"), "local")
+        img_store_path_prefix = os.getenv(github_action_env("IMG_STORE_PATH_PREFIX"), "content/blogs")
+        img_store_url_path_prefix = os.getenv(github_action_env("IMG_STORE_URL_PATH_PREFIX"), "/content/blogs")
+        img_store_github_token = os.getenv(github_action_env("IMG_STORE_GITHUB_TOKEN"))
+        img_store_github_repo = os.getenv(github_action_env("IMG_STORE_GITHUB_REPO"))
+        img_store_github_branch = os.getenv(github_action_env("IMG_STORE_GITHUB_BRANCH"))
+        md_store_path_prefix = os.getenv(github_action_env("MD_STORE_PATH_PREFIX"), "content/blogs")
+    else:
+        cfg = ConfigParser()
+        cfg.read("config.ini")
+        notion_token = cfg["notion"]["token"]
+        notion_database_id = cfg["notion"]["database_id"]
+        img_store_type = cfg["img_store"]["type"] # local, github
+        img_store_path_prefix = cfg["img_store"]["path_prefix"]
+        img_store_url_path_prefix = cfg["img_store"]["url_path_prefix"]
+        img_store_github_token = cfg["img_store"]["github_token"]
+        img_store_github_repo = cfg["img_store"]["github_repo"]
+        img_store_github_branch = cfg["img_store"]["github_branch"]
+        md_store_path_prefix = cfg["md_store"]["path_prefix"] # save dir of markdown
 
     logger.info("start parse notion for blog...")
 
