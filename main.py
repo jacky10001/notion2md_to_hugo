@@ -41,7 +41,7 @@ from notion2md import NotionToMarkdown
 from utils import get_logger, get_github_action_arg
 
 
-logger = get_logger("main")
+logger = get_logger("main_flow")
 
 
 class Notion:

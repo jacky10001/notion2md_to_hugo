@@ -5,6 +5,7 @@
 
 @change 2022/07/23
 - 添加logger
+- 重新處理不支持的block, 避免程式中斷
 
 @docs 2022/07/21
 - 新增註解
@@ -24,9 +25,8 @@ from utils import get_logger
 logger = get_logger("notion2md")
 
 
-class NotSupportType(TypeError):
-    """ 處理不支持的block類型 """
-    pass
+def proc_unsupport_block(text):
+    return f"ERROR:{text}"
 
 
 class ElementAnnotations:
@@ -85,11 +85,12 @@ class NotionToMarkdown:
         return text
     
     def parse(self) -> str:
+        """解析 notion page"""
         blocks = self.get_blocks(self.page_id)
         return self._parse_blocks(blocks)
     
     def _handle_element_base(self, element):
-        """處理區塊元素的基礎方法"""
+        """處理 block 元素的基礎方法"""
         plain_text = element.get('plain_text', '')
         href = element.get('href', '')
         annotations = ElementAnnotations(element.get('annotations', {}))
@@ -101,14 +102,6 @@ class NotionToMarkdown:
 
     def handle_element_text(self, element):
         """處理 block 內的文字"""
-        return self._handle_element_base(element)
-    
-    def handle_element_mention(self, element):
-        """處理 block mention元素, 僅支持link_preview"""
-        mention_field = element.get('mention', {})
-        if mention_field.get('type') != 'link_preview':
-            logger.warn("not support block...")
-            raise NotSupportType('不支持mention元素link_preview之外的類型')
         return self._handle_element_base(element)
     
     def _handle_text_block_base(self, block, level=0):
@@ -124,20 +117,24 @@ class NotionToMarkdown:
 
     def handle_block_paragraph(self, block: dict, level=0):
         """處理 paragraph block"""
+        logger.debug("paragraph")
         return self._handle_text_block_base(block)
 
     def handle_block_numbered_list_item(self, block, level=0):
         """處理 numbered_list block"""
+        logger.debug("numbered_list")
         block_text = self._handle_text_block_base(block)
         return f'1. {block_text}'
     
     def handle_block_bulleted_list_item(self, block, level=0):
         """處理 bulleted_list block"""
+        logger.debug("bulleted_list")
         block_text = self._handle_text_block_base(block)
         return f'- {block_text}'
 
     def handle_block_image(self, block, level=0):
         """處理 image block"""
+        logger.debug("image")
         image_field = block['image']
         image_type = image_field['type']
         image_url = image_field[image_type]['url']
@@ -145,6 +142,7 @@ class NotionToMarkdown:
     
     def handle_block_code(self, block, level=0):
         """處理 code block"""
+        logger.debug("code")
         block_text = self._handle_text_block_base(block)
         lang = block.get('code', {}).get('language', '')
         if level > 0:
@@ -158,43 +156,46 @@ class NotionToMarkdown:
     
     def handle_block_heading_1(self, block, level=0):
         """處理 heading_1 block"""
+        logger.debug("heading_1")
         block_text = self._handle_text_block_base(block)
         return f'# {block_text}'
     
     def handle_block_heading_2(self, block, level=0):
         """處理 heading_2 block"""
+        logger.debug("heading_2")
         block_text = self._handle_text_block_base(block)
         return f'## {block_text}'
     
     def handle_block_heading_3(self, block, level=0):
         """處理 heading_3 block"""
+        logger.debug("heading_3")
         block_text = self._handle_text_block_base(block)
         return f'### {block_text}'
     
     def handle_block_bookmark(self, block, level=0):
         """處理 bookmark block"""
+        logger.debug("bookmark")
         bookmark_field = block.get('bookmark', {})
         bookmark_url = bookmark_field.get('url', '')
         return f'- [{bookmark_url}]({bookmark_url})'
     
     def handle_block_quote(self, block, level=0):
         """處理 quote block"""
+        logger.debug("quote")
         block_text = self._handle_text_block_base(block)
         return f'> {block_text}'
 
     def handle_block_to_do(self, block, level=0):
         """處理 to-do block"""
+        logger.debug("to_do")
         block_text = self._handle_text_block_base(block)
         checked = block.get('to_do', {}).get('checked', False)
         prefix = f'- [{"x" if checked else " "}] '
         return f'{prefix}{block_text}'
     
-    def handle_block_unsupported(self, block, level=0):
-        """處理 不支持的 block (當前simpletable在api中未返回)"""
-        return ''
-    
     def handle_block_child_database(self, block, level=0):
         """處理子database"""
+        logger.debug("child_database")
         database_id = block['id']
         kwargs = {
             'page_size': 100
@@ -239,10 +240,12 @@ class NotionToMarkdown:
 
     def handle_block_divider(self, block, level=0):
         """處理 divider block"""
+        logger.debug("divider block")
         return '------'
 
     def handle_block_callout(self, block, level=0):
         """處理callout類型的 block (處理為粗體文字)"""
+        logger.debug("callout block")
         callout_html = """<div style="width: 100%; max-width: 850px; margin-top: 4px; margin-bottom: 4px;">
     <div style="display: flex;">
         <div style="display: flex; width: 100%; border-radius: 3px; background: rgb(241, 241, 239); padding: 16px 16px 16px 12px;">
@@ -269,3 +272,30 @@ class NotionToMarkdown:
             icon_url = icon_field.get('external', {}).get('url', '')
             icon_html = f"""<div><div style="width: 100%; height: 100%;"><img src="{icon_url}" style="display: block; object-fit: cover; border-radius: 3px; width: 16.8px; height: 16.8px; transition: opacity 100ms ease-out 0s;"></div></div>"""
         return callout_html.format(icon_html=icon_html, block_html=block_html)
+    
+    def handle_block_unsupported(self, block, level=0):
+        """處理 不支持的 block (當前simpletable在api中未返回)"""
+        return proc_unsupport_block("不支持的API block")
+    
+    def handle_element_mention(self, element):
+        """處理 block mention元素, 僅支持link_preview"""
+        mention_field = element.get('mention', {})
+        if mention_field.get('type') != 'link_preview':
+            logger.warn("not support mention type...")
+            return proc_unsupport_block("不支持mention元素link_preview外的類型")
+        return self._handle_element_base(element)
+
+    def handle_block_table(self, block, level=0):
+        """處理 table block"""
+        logger.warn("not support block_table...")
+        return proc_unsupport_block("不支持table (表格)")
+
+    def handle_block_table_row(self, block, level=0):
+        """處理 table block"""
+        logger.warn("not support block_table_row...")
+        return proc_unsupport_block("不支持table_row (文檔)")
+
+    def handle_block_table_of_contents(self, block, level=0):
+        """處理 table of contents block"""
+        logger.warn("not support block_table_of_contents...")
+        return proc_unsupport_block("不支持table of contents (文檔目錄)")
