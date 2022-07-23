@@ -14,7 +14,7 @@ ENV PYTHONUNBUFFERED=1 \
 COPY ./requirements.txt /
 RUN pip3 install --no-cache-dir --no-compile -r requirements.txt
 
-COPY ./entrypoint.sh ./main.py ./notion2md.py /
+COPY ./entrypoint.sh ./main.py ./notion2md.py ./utils.py /
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

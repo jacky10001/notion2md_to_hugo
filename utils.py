@@ -22,7 +22,8 @@ def get_platform():
 
 
 def get_github_action_arg():
-    if get_platform() == "github":
+    platform = get_platform()
+    if platform == "github":
         notion_token = os.environ[github_action_env("NOTION_TOKEN")]
         notion_database_id = os.environ[github_action_env("NOTION_DATABASE_ID")]
         img_store_type = os.getenv(github_action_env("IMG_STORE_TYPE"), "local")
@@ -46,6 +47,7 @@ def get_github_action_arg():
         md_store_path_prefix = cfg["md_store"]["path_prefix"] # save dir of markdown
 
     argv = (
+        platform,
         notion_token,
         notion_database_id,
         img_store_type,
@@ -95,6 +97,6 @@ def get_logger(name, level:str="INFO"):
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
-    logger.debug("get logger, level: {level}, platform: {platform}, debug_mode: {debug_mode}")
+    logger.debug(f"get logger, level: {level}, platform: {platform}, debug_mode: {debug_mode}")
 
     return logger

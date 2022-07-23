@@ -4,6 +4,7 @@
 
 @change 2022/07/23
 - 依建立日期來分類markdown
+- 新增處理輸入參數的函式
 
 @change 2022/07/22
 - 移除 Notion 類的 category
@@ -292,6 +293,7 @@ def save_markdown_file(path_prefix: str, content: str, filename: str):
 
 def main():
     logger.info("parse github action arguments...")
+    platform, \
     notion_token, \
     notion_database_id, \
     img_store_type, \
@@ -307,13 +309,19 @@ def main():
     page_nodes = notion.items_changed()
     logger.info(f"it will update {len(page_nodes)} article...")
     for page_node in page_nodes:
+        # 檢查項目title是否為metion連結
         if not notion.title(page_node).strip():
+            logger.warning("please check the article is a metion link...")
             continue
+
+        # 取得 page id
         logger.info(f"get page content from notion...")
         page_id = notion.get_page_id(page_node)
         logger.info(f"parse <<{notion.title(page_node)}>>...")
+
         # notion page -> markdown
         markdown_text = NotionToMarkdown(notion_token, page_id).parse()
+
         # markdown 圖片處理
         logger.info(f"replace img link in article <<{notion.title(page_node)}>>...")
         img_store_kwargs = {
@@ -325,16 +333,22 @@ def main():
         }
         img_handler = ImgHandler(markdown_text, img_store_type, **img_store_kwargs)
         markdown_text = img_handler.extract_n_replace_imglink()
+
         # 產生yaml標頭的markdown供hugo生成
         logger.info(f"generate and save article <<{notion.title(page_node)}>>...")
         markdown_with_header = get_markdown_with_yaml_header(page_node, markdown_text, notion)
+
         # 添加日期目錄
         md_store_path = md_store_path_prefix_by_date(page_node, md_store_path_prefix)
+
         # 保存markdown到指定目錄
         save_markdown_file(md_store_path, markdown_with_header, notion.md_filename(page_node))
+
         # 更新notion中的對應項
-        logger.info("update page property for article <<{notion.title(page_node)}>>...")
-        # notion.publish(page_node)
+        if platform != "github":
+            logger.info("update page property for article <<{notion.title(page_node)}>>...")
+            notion.publish(page_node)
+    
     logger.info("all done!!!\n")
 
 
