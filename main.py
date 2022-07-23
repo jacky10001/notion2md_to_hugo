@@ -275,7 +275,7 @@ def get_markdown_with_yaml_header(page_node: dict, article_content: str, notion:
     return f"---\n{header_text}---\n\n\n\n{article_content}"
 
 
-def md_store_path_prefix_by_date(page_node, md_store_path_prefix):
+def store_path_prefix_by_date(page_node, md_store_path_prefix):
     create_time = page_node["properties"].get("CreateAt", {}).get("created_time", "")
     create_date = create_time[:create_time.find('T')].replace("-", "")
     return os.path.join(md_store_path_prefix, create_date)
@@ -323,14 +323,19 @@ def main():
         # notion page -> markdown
         markdown_text = NotionToMarkdown(notion_token, page_id).parse()
 
+        # 添加日期目錄
+        img_store_path = store_path_prefix_by_date(page_node, img_store_path_prefix)
+        img_store_url_path = store_path_prefix_by_date(page_node, img_store_url_path_prefix)
+        md_store_path = store_path_prefix_by_date(page_node, md_store_path_prefix)
+
         # markdown 圖片處理
         logger.info(f"replace img link in article")
         img_store_kwargs = {
             "github_token": img_store_github_token,
             "repo": img_store_github_repo,
-            "store_path_prefix": img_store_path_prefix,
+            "store_path_prefix": img_store_path,
             "branch": img_store_github_branch,
-            "url_path_prefix": img_store_url_path_prefix,
+            "url_path_prefix": img_store_url_path,
         }
         img_handler = ImgHandler(markdown_text, img_store_type, **img_store_kwargs)
         markdown_text = img_handler.extract_n_replace_imglink()
@@ -338,9 +343,6 @@ def main():
         # 產生yaml標頭的markdown供hugo生成
         logger.info(f"generate and save article <<{notion.title(page_node)}>>...")
         markdown_with_header = get_markdown_with_yaml_header(page_node, markdown_text, notion)
-
-        # 添加日期目錄
-        md_store_path = md_store_path_prefix_by_date(page_node, md_store_path_prefix)
 
         # 保存markdown到指定目錄
         save_markdown_file(md_store_path, markdown_with_header, notion.md_filename(page_node))

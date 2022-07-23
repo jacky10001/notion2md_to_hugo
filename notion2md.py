@@ -293,9 +293,9 @@ class NotionToMarkdown:
     def handle_block_table_row(self, block, level=0):
         """處理 table block"""
         logger.warn("not support block_table_row...")
-        return proc_unsupport_block("不支持table_row (文檔)")
+        return proc_unsupport_block("不支持table_row (表格列)")
 
     def handle_block_table_of_contents(self, block, level=0):
         """處理 table of contents block"""
         logger.warn("not support block_table_of_contents...")
-        return proc_unsupport_block("不支持table of contents (文檔目錄)")
+        return proc_unsupport_block("不支持table of contents (目錄)")
