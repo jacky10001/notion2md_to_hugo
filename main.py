@@ -5,6 +5,7 @@
 @change 2022/07/23
 - 依建立日期來分類markdown
 - 新增處理輸入參數的函式
+- `and`判斷IsPublish, NeedUpdate
 
 @change 2022/07/22
 - 移除 Notion 類的 category
@@ -124,7 +125,7 @@ class Notion:
     def items_changed(self):
         """獲取需要更新的項目"""
         data = self.notion.databases.query(database_id=self.database_id, filter={
-            "or": [
+            "and": [
                 {
                     "property": "IsPublish",
                     "checkbox": {
@@ -323,7 +324,7 @@ def main():
         markdown_text = NotionToMarkdown(notion_token, page_id).parse()
 
         # markdown 圖片處理
-        logger.info(f"replace img link in article <<{notion.title(page_node)}>>...")
+        logger.info(f"replace img link in article")
         img_store_kwargs = {
             "github_token": img_store_github_token,
             "repo": img_store_github_repo,
@@ -345,8 +346,8 @@ def main():
         save_markdown_file(md_store_path, markdown_with_header, notion.md_filename(page_node))
 
         # 更新notion中的對應項
-        if platform != "github":
-            logger.info("update page property for article <<{notion.title(page_node)}>>...")
+        if platform == "github":
+            logger.info("update page property for article <<{notion.title(page_node)}>>")
             notion.publish(page_node)
     
     logger.info("all done!!!\n")
