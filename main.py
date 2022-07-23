@@ -25,11 +25,9 @@
 """
 
 import hashlib
-import logging
 import os
 import re
 import time
-from configparser import ConfigParser
 from urllib.parse import urlparse
 
 import requests
@@ -38,19 +36,10 @@ from github import Github, GithubException
 from notion_client import Client
 
 from notion2md import NotionToMarkdown
+from utils import get_logger, get_github_action_arg
 
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("notion2md")
-logger.setLevel(logging.INFO)
 
-sh = logging.StreamHandler()
-sh.setFormatter(formatter)
-logger.addHandler(sh)
-
-## 在本機使用可以保存console資訊
-# fh = logging.FileHandler("console.log")
-# fh.setFormatter(formatter)
-# logger.addHandler(fh)
+logger = get_logger("main")
 
 
 class Notion:
@@ -301,38 +290,19 @@ def save_markdown_file(path_prefix: str, content: str, filename: str):
         f.write(content)
 
 
-def github_action_env(key):
-    return f"INPUT_{key}".upper()
-
-
 def main():
-    platform = os.getenv(github_action_env("PLATFORM"), "no-github")
-    logger.info(f"platform: {platform}")
-    if platform == "github":
-        notion_token = os.environ[github_action_env("NOTION_TOKEN")]
-        notion_database_id = os.environ[github_action_env("NOTION_DATABASE_ID")]
-        img_store_type = os.getenv(github_action_env("IMG_STORE_TYPE"), "local")
-        img_store_path_prefix = os.getenv(github_action_env("IMG_STORE_PATH_PREFIX"), "content/blogs")
-        img_store_url_path_prefix = os.getenv(github_action_env("IMG_STORE_URL_PATH_PREFIX"), "/content/blogs")
-        img_store_github_token = os.getenv(github_action_env("IMG_STORE_GITHUB_TOKEN"))
-        img_store_github_repo = os.getenv(github_action_env("IMG_STORE_GITHUB_REPO"))
-        img_store_github_branch = os.getenv(github_action_env("IMG_STORE_GITHUB_BRANCH"))
-        md_store_path_prefix = os.getenv(github_action_env("MD_STORE_PATH_PREFIX"), "content/blogs")
-    else:
-        cfg = ConfigParser()
-        cfg.read("config.ini")
-        notion_token = cfg["notion"]["token"]
-        notion_database_id = cfg["notion"]["database_id"]
-        img_store_type = cfg["img_store"]["type"] # local, github
-        img_store_path_prefix = cfg["img_store"]["path_prefix"]
-        img_store_url_path_prefix = cfg["img_store"]["url_path_prefix"]
-        img_store_github_token = cfg["img_store"]["github_token"]
-        img_store_github_repo = cfg["img_store"]["github_repo"]
-        img_store_github_branch = cfg["img_store"]["github_branch"]
-        md_store_path_prefix = cfg["md_store"]["path_prefix"] # save dir of markdown
+    logger.info("parse github action arguments...")
+    notion_token, \
+    notion_database_id, \
+    img_store_type, \
+    img_store_path_prefix, \
+    img_store_url_path_prefix, \
+    img_store_github_token, \
+    img_store_github_repo, \
+    img_store_github_branch, \
+    md_store_path_prefix = get_github_action_arg()
 
     logger.info("start parse notion for blog...")
-
     notion = Notion(notion_token, notion_database_id)
     page_nodes = notion.items_changed()
     logger.info(f"it will update {len(page_nodes)} article...")

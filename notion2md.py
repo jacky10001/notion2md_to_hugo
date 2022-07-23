@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 """ notion2md
+轉換 notion page 到 markdown
 參考此處 https://github.com/akkuman/notiontomd
+
+@change 2022/07/23
+- 添加logger
 
 @docs 2022/07/21
 - 新增註解
@@ -13,6 +17,11 @@ import json
 
 import markdown
 from notion_client import Client
+
+from utils import get_logger
+
+
+logger = get_logger("notion2md")
 
 
 class NotSupportType(TypeError):
@@ -60,6 +69,7 @@ class NotionToMarkdown:
     def __init__(self, token, page_id):
         self.notion = Client(auth=token)
         self.page_id = page_id
+        logger.info("connect to notion page")
     
     def get_blocks(self, parent_block_id):
         page_data = self.notion.blocks.children.list(parent_block_id)
@@ -97,6 +107,7 @@ class NotionToMarkdown:
         """處理 block mention元素, 僅支持link_preview"""
         mention_field = element.get('mention', {})
         if mention_field.get('type') != 'link_preview':
+            logger.warn("not support block...")
             raise NotSupportType('不支持mention元素link_preview之外的類型')
         return self._handle_element_base(element)
     
