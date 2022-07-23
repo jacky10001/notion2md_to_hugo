@@ -2,7 +2,7 @@
 """ notion2md
 參考此處 https://github.com/akkuman/notiontomd
 
-@change 2022/07/21
+@docs 2022/07/21
 - 新增註解
 
 @change 2022/07/18

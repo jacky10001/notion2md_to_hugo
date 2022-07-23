@@ -2,11 +2,14 @@
 """ Github Action: Notion 轉換成 Markdown
 參考此處 https://github.com/akkuman/notion_to_github_blog
 
+@change 2022/07/23
+- 依建立日期來分類markdown
+
 @change 2022/07/22
 - 移除 Notion 類的 category
 - 判斷執行平台來處理輸入參數
 
-@change 2022/07/21
+@docs 2022/07/21
 - 新增註解
 
 @change 2022/07/19
@@ -65,8 +68,8 @@ class Notion:
         - Article (text): "metion page" 連接
         - MDFilename (text): 建立 markdown 檔名
         - Tags (multi_select): 標籤
-        - IsPublish (checkbox): 是否發布
-        - NeedUpdate (checkbox): 是否更新
+        - IsPublish (checkbox): 是否已經發布
+        - NeedUpdate (checkbox): 是否需要更新
         - CreateAt (Created time): 建立時間
         - UpdateAt (Last edited time): 更新時間
     """
@@ -74,8 +77,8 @@ class Notion:
         self.notion = Client(auth=token)
         self.database_id = database_id
     
-    def get_page_id(self, data: dict) -> list:
-        rich_text_node = data["properties"].get("Article", {})
+    def get_page_id(self, page_node: dict) -> list:
+        rich_text_node = page_node["properties"].get("Article", {})
         mentions = []
         if rich_text_node["type"] != "rich_text":
             raise TypeError("this field is not a rich text")
@@ -84,8 +87,8 @@ class Notion:
                 mentions.append(i["mention"]["page"]["id"])
         return mentions[0] if len(mentions) > 0 else None
     
-    def title(self, data: dict) -> str:
-        title_node = data["properties"].get("Name", {})
+    def title(self, page_node: dict) -> str:
+        title_node = page_node["properties"].get("Name", {})
         title = ""
         if title_node["type"] != "title":
             raise TypeError("this field is not a title")
@@ -93,14 +96,14 @@ class Notion:
             title += i["plain_text"]
         return title
     
-    def is_publish(self, data: dict) -> bool:
-        return data["properties"].get("IsPublish", {}).get("checkbox", False)
+    def is_publish(self, page_node: dict) -> bool:
+        return page_node["properties"].get("IsPublish", {}).get("checkbox", False)
 
-    def need_update(self, data: dict) -> bool:
-        return data["properties"].get("NeedUpdate", {}).get("checkbox", False)
+    def need_update(self, page_node: dict) -> bool:
+        return page_node["properties"].get("NeedUpdate", {}).get("checkbox", False)
     
-    def md_filename(self, data: dict) -> str:
-        rich_text_node = data["properties"].get("MDFilename", {})
+    def md_filename(self, page_node: dict) -> str:
+        rich_text_node = page_node["properties"].get("MDFilename", {})
         file_name = ""
         if rich_text_node["type"] != "rich_text":
             raise TypeError("this field is not a rich text")
@@ -108,21 +111,21 @@ class Notion:
             file_name += i["plain_text"]
         return file_name
     
-    def tags(self, data: dict) -> list:
+    def tags(self, page_node: dict) -> list:
         tags_ = []
-        tags_node = data["properties"].get("Tags", {}).get("multi_select", [])
+        tags_node = page_node["properties"].get("Tags", {}).get("multi_select", [])
         for i in tags_node:
             tags_.append(i["name"])
         return tags_
     
-    def create_at(self, data: dict) -> str:
-        return data["properties"].get("CreateAt", {}).get("created_time", "")
+    def create_at(self, page_node: dict) -> str:
+        return page_node["properties"].get("CreateAt", {}).get("created_time", "")
 
-    def update_at(self, data: dict) -> str:
-        return data["properties"].get("UpdateAt", {}).get("last_edited_time", "")
+    def update_at(self, page_node: dict) -> str:
+        return page_node["properties"].get("UpdateAt", {}).get("last_edited_time", "")
     
-    def publish(self, data: dict) -> bool:
-        page_id = data["id"]
+    def publish(self, page_node: dict) -> bool:
+        page_id = page_node["id"]
         self.notion.pages.update(page_id, properties={
             "IsPublish": { "checkbox": True },
             "NeedUpdate": { "checkbox": False }
@@ -161,6 +164,7 @@ class ImgStore:
 
     def store(self):
         raise NotImplementedError
+
 
 class ImgStoreRemoteGithub(ImgStore):
     """圖片保存在 github 圖床"""
@@ -225,7 +229,7 @@ class ImgHandler:
     """
     pattern = re.compile(r'^(!\[[^\]]*\]\((.*?)\s*("(?:.*[^"])")?\s*\))', re.MULTILINE)
     
-    exclude_pattern = re.compile(r"^https://kroki.io/")
+    exclude_pattern = re.compile(r"^https://xxx.xx/")
 
     def __init__(self, markdown_text, img_store_type, **kwargs):
         self.markdown_text = markdown_text
@@ -261,6 +265,7 @@ class ImgHandler:
             self.markdown_text = self.markdown_text.replace(match_text, img_text)
         return self.markdown_text
 
+
 def get_markdown_with_yaml_header(page_node: dict, article_content: str, notion: Notion):
     yaml_header = {
         "title": "\"" + notion.title(page_node) + "\"",
@@ -273,10 +278,17 @@ def get_markdown_with_yaml_header(page_node: dict, article_content: str, notion:
         "toc": None,
         "socialShare": False,
     }
-    header_text = yaml.dump(yaml_header, allow_unicode=True, sort_keys=False)
+    header_text = yaml.dump(yaml_header, allow_unicode=True, sort_keys=False)  #不要自動排序
     header_text = header_text.replace(" null", "")
     header_text = header_text.replace("\"", "")
     return f"---\n{header_text}---\n\n\n\n{article_content}"
+
+
+def md_store_path_prefix_by_date(page_node, md_store_path_prefix):
+    create_time = page_node["properties"].get("CreateAt", {}).get("created_time", "")
+    create_date = create_time[:create_time.find('T')].replace("-", "")
+    return os.path.join(md_store_path_prefix, create_date)
+
 
 def save_markdown_file(path_prefix: str, content: str, filename: str):
     filename = filename.strip()
@@ -288,12 +300,14 @@ def save_markdown_file(path_prefix: str, content: str, filename: str):
     with open(md_filepath, "w+", encoding="utf-8") as f:
         f.write(content)
 
+
 def github_action_env(key):
     return f"INPUT_{key}".upper()
 
+
 def main():
     platform = os.getenv(github_action_env("PLATFORM"), "no-github")
-    logger.info(f"Platform: {platform}")
+    logger.info(f"platform: {platform}")
     if platform == "github":
         notion_token = os.environ[github_action_env("NOTION_TOKEN")]
         notion_database_id = os.environ[github_action_env("NOTION_DATABASE_ID")]
@@ -344,12 +358,15 @@ def main():
         # 產生yaml標頭的markdown供hugo生成
         logger.info(f"generate and save article <<{notion.title(page_node)}>>...")
         markdown_with_header = get_markdown_with_yaml_header(page_node, markdown_text, notion)
+        # 添加日期目錄
+        md_store_path = md_store_path_prefix_by_date(page_node, md_store_path_prefix)
         # 保存markdown到指定目錄
-        save_markdown_file(md_store_path_prefix, markdown_with_header, notion.md_filename(page_node))
+        save_markdown_file(md_store_path, markdown_with_header, notion.md_filename(page_node))
         # 更新notion中的對應項
         logger.info("update page property for article <<{notion.title(page_node)}>>...")
         # notion.publish(page_node)
     logger.info("all done!!!\n")
+
 
 if __name__ == "__main__":
     main()
