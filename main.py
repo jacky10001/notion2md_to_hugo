@@ -272,7 +272,14 @@ def get_markdown_with_yaml_header(page_node: dict, article_content: str, notion:
     header_text = yaml.dump(yaml_header, allow_unicode=True, sort_keys=False)  #不要自動排序
     header_text = header_text.replace(" null", "")
     header_text = header_text.replace("\"", "")
-    return f"---\n{header_text}---\n\n\n\n{article_content}"
+    
+    statement_zh = "<center>此內容由 Notion 編輯並經由 Notion API 自動轉成 Hugo 頁面</center>"
+    statement_en = "<center>The content write by Notion, and use Notion API convert to Hugo page.</center>"
+
+    full_content = f"---\n{header_text}---\n\n\n\n"
+    full_content += f"-----\n{statement_zh}\n{statement_en}\n\n-----\n\n"
+    full_content += f"{article_content}"
+    return full_content
 
 
 def store_path_prefix_by_date(page_node, md_store_path_prefix):
