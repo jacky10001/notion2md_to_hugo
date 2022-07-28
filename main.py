@@ -144,13 +144,13 @@ class Notion:
 
 
 class ImgStore:
-    def __init__(self, img_data, img_ext, **kwargs):
-        self.img_ext = img_ext
-        self.img_data = img_data
+    def __init__(self, im_data, im_ext, **kwargs):
+        self.im_ext = im_ext
+        self.im_data = im_data
         self.kwargs = kwargs
     
     def get_md5(self) -> str:
-        md5hash = hashlib.md5(self.img_data)
+        md5hash = hashlib.md5(self.im_data)
         return md5hash.hexdigest()
 
     def store(self):
@@ -161,7 +161,7 @@ class ImgStoreRemoteGithub(ImgStore):
     """圖片保存在 github 圖床"""
     def get_store_path(self, path) -> str:
         md5str = self.get_md5()
-        return os.path.join(path, f"{md5str[:2]}/{md5str[2:4]}/{md5str}{self.img_ext}").replace("\\", "/")
+        return os.path.join(path, f"{md5str[:2]}/{md5str[2:4]}/{md5str}{self.im_ext}").replace("\\", "/")
 
     def store(self):
         github_token = self.kwargs["github_token"]
@@ -175,7 +175,7 @@ class ImgStoreRemoteGithub(ImgStore):
             gh_repo.create_file(
                 path=store_path,
                 message=f'notion img auto upload at {time.strftime("%Y-%m-%d %H:%M:%S")}',
-                content=self.img_data,
+                content=self.im_data,
                 branch=branch
             )
         except GithubException as e:
@@ -185,7 +185,7 @@ class ImgStoreRemoteGithub(ImgStore):
             gh_repo.update_file(
                 path=store_path,
                 message=f'notion img auto upload at {time.strftime("%Y-%m-%d %H:%M:%S")}',
-                content=self.img_data,
+                content=self.im_data,
                 sha=blob_sha
             )
         return f"https://raw.githubusercontent.com/{repo}/{branch}/{store_path}"
@@ -193,22 +193,22 @@ class ImgStoreRemoteGithub(ImgStore):
 
 class ImgStoreLocal(ImgStore):
     """直接存在存放庫"""
-    def get_img_filename(self):
+    def get_im_filename(self):
         md5str = self.get_md5()
-        return f"{md5str}{self.img_ext}"
+        return f"{md5str}{self.im_ext}"
 
-    def get_img_path(self, path) -> str:
-        return os.path.join(path, self.get_img_filename())
+    def get_im_path(self, path) -> str:
+        return os.path.join(path, self.get_im_filename())
     
     def store(self):
         store_path_prefix = self.kwargs["store_path_prefix"]
         url_path_prefix = self.kwargs["url_path_prefix"]
         if not os.path.exists(store_path_prefix):
             os.makedirs(store_path_prefix)
-        store_path = self.get_img_path(store_path_prefix)
+        store_path = self.get_im_path(store_path_prefix)
         with open(store_path, "wb+") as f:
-            f.write(self.img_data)
-        return self.get_img_path(url_path_prefix)
+            f.write(self.im_data)
+        return self.get_im_path(url_path_prefix)
 
 
 class ImgHandler:
@@ -216,26 +216,26 @@ class ImgHandler:
     
     Attributes:
         markdown_text: markdown
-        img_store_type: local, github
+        im_store_type: local, github
     """
     pattern = re.compile(r'^(!\[[^\]]*\]\((.*?)\s*("(?:.*[^"])")?\s*\))', re.MULTILINE)
     
     exclude_pattern = re.compile(r"^https://xxx.xx/")
 
-    def __init__(self, markdown_text, img_store_type, **kwargs):
+    def __init__(self, markdown_text, im_store_type, **kwargs):
         self.markdown_text = markdown_text
         self.kwargs = kwargs
-        self.img_handler_cls = None
-        if img_store_type == "local":
-            self.img_handler_cls = ImgStoreLocal
-        elif img_store_type == "github":
-            self.img_handler_cls = ImgStoreRemoteGithub
+        self.im_handler_cls = None
+        if im_store_type == "local":
+            self.im_handler_cls = ImgStoreLocal
+        elif im_store_type == "github":
+            self.im_handler_cls = ImgStoreRemoteGithub
     
     def get_ext_from_imglink(self, imglink):
         url_path = urlparse(imglink).path
         return os.path.splitext(url_path)[1]
     
-    def get_img_data_from_url(self, url):
+    def get_im_data_from_url(self, url):
         return requests.get(url).content
     
     def is_exclude(self, imglink):
@@ -249,11 +249,11 @@ class ImgHandler:
             imglink = item[1]
             if self.is_exclude(imglink):
                 continue
-            img_ext = self.get_ext_from_imglink(imglink)
-            img_data = self.get_img_data_from_url(imglink)
-            new_imglink = self.img_handler_cls(img_data, img_ext, **self.kwargs).store()
-            img_text = match_text.replace(imglink, new_imglink)
-            self.markdown_text = self.markdown_text.replace(match_text, img_text)
+            im_ext = self.get_ext_from_imglink(imglink)
+            im_data = self.get_im_data_from_url(imglink)
+            new_imglink = self.im_handler_cls(im_data, im_ext, **self.kwargs).store()
+            im_text = match_text.replace(imglink, new_imglink)
+            self.markdown_text = self.markdown_text.replace(match_text, im_text)
         return self.markdown_text
 
 
@@ -282,7 +282,13 @@ def get_markdown_with_yaml_header(page_node: dict, article_content: str, notion:
     return full_content
 
 
-def store_path_prefix_by_date(page_node, md_store_path_prefix):
+def im_store_path_prefix_by_date(page_node, md_store_path_prefix):
+    create_time = page_node["properties"].get("CreateAt", {}).get("created_time", "")
+    create_date = create_time[:create_time.find('T')].replace("-", "")
+    return os.path.join(md_store_path_prefix, create_date, "images")
+
+
+def md_store_path_prefix_by_date(page_node, md_store_path_prefix):
     create_time = page_node["properties"].get("CreateAt", {}).get("created_time", "")
     create_date = create_time[:create_time.find('T')].replace("-", "")
     return os.path.join(md_store_path_prefix, create_date)
@@ -304,12 +310,12 @@ def main():
     platform, \
     notion_token, \
     notion_database_id, \
-    img_store_type, \
-    img_store_path_prefix, \
-    img_store_url_path_prefix, \
-    img_store_github_token, \
-    img_store_github_repo, \
-    img_store_github_branch, \
+    im_store_type, \
+    im_store_path_prefix, \
+    im_store_url_path_prefix, \
+    im_store_github_token, \
+    im_store_github_repo, \
+    im_store_github_branch, \
     md_store_path_prefix = get_github_action_arg()
 
     logger.info("start parse notion for blog...")
@@ -331,21 +337,21 @@ def main():
         markdown_text = NotionToMarkdown(notion_token, page_id).parse()
 
         # 添加日期目錄
-        img_store_path = store_path_prefix_by_date(page_node, img_store_path_prefix)
-        img_store_url_path = store_path_prefix_by_date(page_node, img_store_url_path_prefix)
-        md_store_path = store_path_prefix_by_date(page_node, md_store_path_prefix)
+        im_store_path = im_store_path_prefix_by_date(page_node, im_store_path_prefix)
+        im_store_url_path = im_store_path_prefix_by_date(page_node, im_store_url_path_prefix)
+        md_store_path = md_store_path_prefix_by_date(page_node, md_store_path_prefix)
 
         # markdown 圖片處理
         logger.info(f"replace img link in article")
-        img_store_kwargs = {
-            "github_token": img_store_github_token,
-            "repo": img_store_github_repo,
-            "store_path_prefix": img_store_path,
-            "branch": img_store_github_branch,
-            "url_path_prefix": img_store_url_path,
+        im_store_kwargs = {
+            "github_token": im_store_github_token,
+            "repo": im_store_github_repo,
+            "store_path_prefix": im_store_path,
+            "branch": im_store_github_branch,
+            "url_path_prefix": im_store_url_path,
         }
-        img_handler = ImgHandler(markdown_text, img_store_type, **img_store_kwargs)
-        markdown_text = img_handler.extract_n_replace_imglink()
+        im_handler = ImgHandler(markdown_text, im_store_type, **im_store_kwargs)
+        markdown_text = im_handler.extract_n_replace_imglink()
 
         # 產生yaml標頭的markdown供hugo生成
         logger.info(f"generate and save article <<{notion.title(page_node)}>>...")
