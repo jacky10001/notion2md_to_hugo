@@ -2,6 +2,9 @@
 """ Github Action: Notion 轉換成 Markdown
 參考此處 https://github.com/akkuman/notion_to_github_blog
 
+@change 2022/07/29
+- 新增驗證 1mage url
+
 @change 2022/07/23
 - 依建立日期來分類markdown
 - 新增處理輸入參數的函式
@@ -31,6 +34,8 @@ import os
 import re
 import time
 from urllib.parse import urlparse
+from urllib.request import urlopen
+from urllib.error import URLError
 
 import requests
 import yaml
@@ -219,8 +224,11 @@ class ImgHandler:
         im_store_type: local, github
     """
     pattern = re.compile(r'^(!\[[^\]]*\]\((.*?)\s*("(?:.*[^"])")?\s*\))', re.MULTILINE)
+
+    verify_pattern1 = re.compile(r"^https://")
+    verify_pattern2 = re.compile(r"^http://")
     
-    exclude_pattern = re.compile(r"^https://xxx.xx/")
+    exclude_pattern = re.compile(r"^https:/XXX.XXX")
 
     def __init__(self, markdown_text, im_store_type, **kwargs):
         self.markdown_text = markdown_text
@@ -231,23 +239,42 @@ class ImgHandler:
         elif im_store_type == "github":
             self.im_handler_cls = ImgStoreRemoteGithub
     
+    def is_exclude(self, imglink):
+        if self.exclude_pattern.search(imglink):
+            return True
+        return False
+
+    def verify_http(self, imglink):
+        if self.verify_pattern1.search(imglink):
+            return True
+        if self.verify_pattern2.search(imglink):
+            return True
+        return False
+
+    def valid_im_url(self, url):
+        try:
+            urlopen(url)
+        except URLError as e:
+            print(e)
+            return False
+        return True
+    
     def get_ext_from_imglink(self, imglink):
         url_path = urlparse(imglink).path
         return os.path.splitext(url_path)[1]
     
     def get_im_data_from_url(self, url):
         return requests.get(url).content
-    
-    def is_exclude(self, imglink):
-        if self.exclude_pattern.search(imglink):
-            return True
-        return False
 
     def extract_n_replace_imglink(self) -> str:
         for item in self.pattern.findall(self.markdown_text):
             match_text = item[0]
             imglink = item[1]
             if self.is_exclude(imglink):
+                continue
+            if not self.verify_http(imglink):
+                continue
+            if not self.valid_im_url(imglink):
                 continue
             im_ext = self.get_ext_from_imglink(imglink)
             im_data = self.get_im_data_from_url(imglink)
@@ -306,7 +333,7 @@ def save_markdown_file(path_prefix: str, content: str, filename: str):
 
 
 def main():
-    logger.info("parse github action arguments...")
+    logger.info("======================== Parse github action arguments ========================")
     platform, \
     notion_token, \
     notion_database_id, \
@@ -318,7 +345,7 @@ def main():
     im_store_github_branch, \
     md_store_path_prefix = get_github_action_arg()
 
-    logger.info("start parse notion for blog...")
+    logger.info("Start parse notion for blog...")
     notion = Notion(notion_token, notion_database_id)
     page_nodes = notion.items_changed()
     logger.info(f"it will update {len(page_nodes)} article...")
@@ -331,7 +358,7 @@ def main():
         # 取得 page id
         logger.info(f"get page content from notion...")
         page_id = notion.get_page_id(page_node)
-        logger.info(f"parse <<{notion.title(page_node)}>>...")
+        logger.info(f"parse <<{notion.title(page_node)}>>")
 
         # notion page -> markdown
         markdown_text = NotionToMarkdown(notion_token, page_id).parse()
@@ -354,7 +381,7 @@ def main():
         markdown_text = im_handler.extract_n_replace_imglink()
 
         # 產生yaml標頭的markdown供hugo生成
-        logger.info(f"generate and save article <<{notion.title(page_node)}>>...")
+        logger.info(f"generate and save article <<{notion.title(page_node)}>>")
         markdown_with_header = get_markdown_with_yaml_header(page_node, markdown_text, notion)
 
         # 保存markdown到指定目錄
