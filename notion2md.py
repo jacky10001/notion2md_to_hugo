@@ -3,6 +3,9 @@
 轉換 notion page 到 markdown
 參考此處 https://github.com/akkuman/notiontomd
 
+@change 2022/07/29
+- 修改不支持的block的相關提示
+
 @change 2022/07/23
 - 添加logger
 - 重新處理不支持的block, 避免程式中斷
@@ -25,8 +28,8 @@ from utils import get_logger
 logger = get_logger("notion2md")
 
 
-def proc_unsupport_block(text):
-    return f"ERROR:{text}"
+def proc_unsupport_block(text=""):
+    return f"Bot msg: {text}"
 
 
 class ElementAnnotations:
@@ -298,4 +301,4 @@ class NotionToMarkdown:
     def handle_block_table_of_contents(self, block, level=0):
         """處理 table of contents block"""
         logger.warn("not support block_table_of_contents...")
-        return proc_unsupport_block("不支持table of contents (目錄)")
+        return ""
