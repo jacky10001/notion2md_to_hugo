@@ -82,7 +82,8 @@ class NotionToMarkdown:
         text = ''
         for block in blocks:
             block_type = block.get('type')
-            text += '  ' * level + getattr(self, f'handle_block_{block_type}')(block, level) + '\n\n'
+            Eof = "\n" if block_type in ["table", "table_row"] else "\n\n"
+            text += '  ' * level + getattr(self, f'handle_block_{block_type}')(block, level) + Eof
             if block.get('has_children'):
                 text += self._parse_blocks(self.get_blocks(block['id']), level+1)
         return text
@@ -249,9 +250,9 @@ class NotionToMarkdown:
     def handle_block_callout(self, block, level=0):
         """處理callout類型的 block (處理為粗體文字)"""
         logger.debug("callout block")
-        callout_html = """<div style="width: 100%; max-width: 850px; margin-top: 4px; margin-bottom: 4px;">
+        callout_html = """<div class="callout" style="width: 100%; max-width: 850px;">
     <div style="display: flex;">
-        <div style="display: flex; width: 100%; border-radius: 3px; background: rgb(241, 241, 239); padding: 16px 16px 16px 12px;">
+        <div style="display: flex; width: 100%; border-radius: 3px; padding: 16px 16px 16px 12px;">
             <div>
                 <div style="user-select: none; transition: background 20ms ease-in 0s; display: flex; align-items: center; justify-content: center; height: 24px; width: 24px; border-radius: 3px; flex-shrink: 0;">
                     {icon_html}
@@ -290,13 +291,44 @@ class NotionToMarkdown:
 
     def handle_block_table(self, block, level=0):
         """處理 table block"""
-        logger.warn("not support block_table...")
-        return proc_unsupport_block("不支持table (表格)")
+        logger.debug("table...")
+        block_type = block.get('type')
+        table_width = block.get(block_type, {}).get('table_width', 0)
+        has_column_header = block.get(block_type, {}).get('has_column_header', False)
+        has_row_header = block.get(block_type, {}).get('has_row_header', False)
+        # TODO: header support
+        if has_column_header:
+            pass
+        if has_row_header:
+            pass
+        # without header. this like
+        # ||....||
+        # |-|-....-|-|
+        return "  " + "|"*table_width + "|" + "\n  " + "|-"*table_width + "|"
 
     def handle_block_table_row(self, block, level=0):
         """處理 table block"""
-        logger.warn("not support block_table_row...")
-        return proc_unsupport_block("不支持table_row (表格列)")
+        logger.debug("table_row...")
+        block_type = block.get('type')
+
+        rows = block.get(block_type, {}).get("cells", {})
+        print(len(rows))
+
+        rows_text = "|"
+        for i in range(len(rows)):
+            row = rows[i][0]
+            plain_text = row.get('plain_text', '')
+            href = row.get('href', '')
+            annotations = ElementAnnotations(row.get('annotations', {}))
+            parsed_text = plain_text
+            if href:
+                parsed_text = f'[{parsed_text}]({href})'
+            parsed_text = annotations.parse_text(parsed_text)
+            
+            rows_text += parsed_text
+            rows_text += "|"
+            
+        return rows_text
 
     def handle_block_table_of_contents(self, block, level=0):
         """處理 table of contents block"""
